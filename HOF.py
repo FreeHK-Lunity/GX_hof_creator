@@ -183,7 +183,7 @@ $ls_stopreporter
 
         @property
         def eric(self) -> str:
-            return str(self._eric)
+            return str(self._eric.orig)
         @eric.setter
         def eric(self, value: str) -> None:
             self._eric = ericcode(value)
