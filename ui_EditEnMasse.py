@@ -144,7 +144,7 @@ class Ui_MainWindow(object):
 
         self.listWidget = QListWidget(self.centralwidget)
         self.listWidget.setObjectName(u"listWidget")
-        self.listWidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self.listWidget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
         self.gridLayout_2.addWidget(self.listWidget, 1, 0, 2, 1)
 
