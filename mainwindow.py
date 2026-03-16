@@ -2,7 +2,7 @@
 import sys
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QFileDialog, QTableWidgetItem, QListWidgetItem
-from PySide6.QtGui import QCloseEvent, QKeySequence,QShortcut
+from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut, QBrush, QColor
 from PySide6.QtCore import Signal, Slot, QTimer, Qt
 from threading import Thread
 from time import sleep
@@ -20,6 +20,7 @@ from ui_AddRouteEntry import Ui_MainWindow as AddRouteEntry_UI
 from ui_AddTermini import Ui_MainWindow as AddTermini_UI
 from ui_PrefWin import Ui_MainWindow as PrefWin_UI
 from ui_dialog import Ui_Dialog as EricGuesser_UI
+from ui_EditEnMasse import Ui_MainWindow as EditEnMasse_UI
 import multiprocessing
 import copy
 import tkinter as tk
@@ -369,6 +370,7 @@ class Main(QMainWindow):
             self.ui.actionEric_Guesser.triggered.connect(self.open_eric_guesser)
             self.ui.actionExport_HOF_v2.triggered.connect(self.export_hof_v2)
             self.ui.actionReset_Busstop_List_IDs.triggered.connect(self.reset_bsl_ids)
+            self.ui.actionEdit_En_Masse.triggered.connect(self.open_edit_en_masse)
             # self.ui.act
             #----                               ----#
             # thread = Thread(target=self.update_listviews_every_3_minutes)
@@ -471,16 +473,25 @@ class Main(QMainWindow):
             if stuff == 1:
                 ite = self.ui.listWidget_3.currentIndex()
                 index = ite.row()
+                if index < 0 or index >= len(Main.hof_class.stopreporter):
+                    return
                 original = Main.hof_class.stopreporter[index]
                 new_item = copy.deepcopy(original)
                 new_item.busstopID = "".join([chr((ord(i) + random.randint(0,9)))for i in new_item.busstopID])
+                new_item.name = f"{new_item.name}_"
                 Main.hof_class.stopreporter.insert(index, new_item)
-                lw_item = QListWidgetItem(f"{new_item.name}_")
+                lw_item = QListWidgetItem(new_item.name)
                 query = self.ui.Search.toPlainText().strip()
                 if query:
-                    lw_item.setHidden(not self._fuzzy_match(query, f"{new_item.name}_"))
+                    lw_item.setHidden(not self._fuzzy_match(query, new_item.name))
                 self.ui.listWidget_3.insertItem(index, lw_item)
-                self.reload_bslist_id()
+
+                # Keep reverse lookups in sync without a full reload/get_bsl refresh.
+                for key, value in list(self.busstop_id_to_index.items()):
+                    if value >= index:
+                        self.busstop_id_to_index[key] = value + 1
+                self.busstop_id_to_index[new_item.busstopID] = index
+                self.stop_name_to_id_map[new_item.name] = new_item.busstopID
             elif stuff == 2:
                 ite = self.ui.listWidget_4.currentIndex()
                 index = ite.row()
@@ -1137,6 +1148,8 @@ class Main(QMainWindow):
                                 Main.hof_class.stopreporter[index].Inbound_sectionfare if isinstance(Main.hof_class.stopreporter[index].Inbound_sectionfare,float) else -1.0, #type: ignore
                                 curindex=index)) #type: ignore
             Main.opened_windows[-1].show()
+            
+        
 
 
         def open_ddu(self):
@@ -1158,6 +1171,10 @@ class Main(QMainWindow):
                                                        Main.hof_class.termini[index].destination,
                                                        Main.hof_class.termini[index].busfull,
                                                        Main.hof_class.termini[index].flip,curindex=index))
+            Main.opened_windows[-1].show()
+            
+        def open_edit_en_masse(self):
+            Main.opened_windows.append(Main.EditEnMasse())
             Main.opened_windows[-1].show()
         def dirchange_Y(self):
             self.bus_rt_direction = 1
@@ -1708,6 +1725,421 @@ class Main(QMainWindow):
         #     self.ui.textBrowser.clear()
         #     for text, score in results:
         #         self.ui.textBrowser.append(f"{text.upper()} ({score}%)")
+        
+    class EditEnMasse(QMainWindow):
+        sig = Signal()  # Signal to notify parent of bulk changes
+        
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.ui = EditEnMasse_UI()
+            self.ui.setupUi(self)
+            
+            # State management
+            self.staged_changes = {}  # {stop_index: {'name': ..., 'EngDisplay': ..., etc.}}
+            self.hofview = Main.opened_windows[0] if Main.opened_windows else None
+            
+            # Load all stops into listWidget
+            self._load_stops()
+            
+            # Connect search/filter
+            self.ui.searchbar.textChanged.connect(self._filter_stops)
+            
+            # Connect selection change to load current values
+            self.ui.listWidget.itemSelectionChanged.connect(self._load_current_selection)
+            
+            # Connect section fare spinboxes (apply-on-edit)
+            self.ui.doubleSpinBox.valueChanged.connect(self._apply_outbound_fare)
+            self.ui.doubleSpinBox_2.valueChanged.connect(self._apply_inbound_fare)
+            
+            # Connect English name textbox (apply-on-edit)
+            self.ui.english_textbox.textEdited.connect(self._apply_english_name)
+            
+            # Connect autoskip checkbox (apply-on-edit)
+            self.ui.checkBox.stateChanged.connect(self._apply_autoskip)
+            
+            # Connect page configuration buttons
+            self.ui.pushButton_2.clicked.connect(lambda: self._apply_page_config(w8w6_different=True, chi_pages=3))
+            self.ui.pushButton.clicked.connect(lambda: self._apply_page_config(w8w6_different=False, chi_pages=3))
+            self.ui.pushButton_5.clicked.connect(lambda: self._apply_page_config(w8w6_different=True, chi_pages=2))
+            self.ui.pushButton_4.clicked.connect(lambda: self._apply_page_config(w8w6_different=False, chi_pages=2))
+            
+            # Connect Revert and Confirm buttons
+            self.ui.pushButton_6.clicked.connect(self._revert_changes)
+            self.ui.pushButton_7.clicked.connect(self._confirm_changes)
+            
+            # Initialize spinboxes to neutral values
+            self.ui.doubleSpinBox.setValue(-1.0)
+            self.ui.doubleSpinBox_2.setValue(-1.0)
+        
+        def _load_stops(self):
+            """Load all stops from Main.hof_class.stopreporter into listWidget."""
+            self.ui.listWidget.clear()
+            for i, stop in enumerate(Main.hof_class.stopreporter):
+                item = QListWidgetItem(stop.name)
+                item.setData(Qt.ItemDataRole.UserRole, i)  # Store original index
+                self.ui.listWidget.addItem(item)
+        
+        def _filter_stops(self, search_text: str):
+            """Filter listWidget items based on search text."""
+            search_lower = search_text.lower()
+            
+            # Clear selection to prevent accidental edits to hidden items
+            self.ui.listWidget.clearSelection()
+            
+            # Filter items
+            for i in range(self.ui.listWidget.count()):
+                item = self.ui.listWidget.item(i)
+                stop_index = item.data(Qt.ItemDataRole.UserRole)
+                stop = Main.hof_class.stopreporter[stop_index]
+                
+                # Check if search matches stop name or English display
+                visible = (search_lower in stop.name.lower() or 
+                          search_lower in stop.EngDisplay.lower())
+                item.setHidden(not visible)
+        
+        def _load_current_selection(self):
+            """Load values from selected stop(s) into input fields."""
+            selected_items = self.ui.listWidget.selectedItems()
+            
+            if len(selected_items) == 1:
+                # Load values from single selected stop
+                stop_index = selected_items[0].data(Qt.ItemDataRole.UserRole)
+                stop = Main.hof_class.stopreporter[stop_index]
+                
+                # Get current or staged values
+                if stop_index in self.staged_changes:
+                    osf = self.staged_changes[stop_index].get('Outbound_sectionfare', stop._raw_Outbound_sectionfare)
+                    isf = self.staged_changes[stop_index].get('Inbound_sectionfare', stop._raw_Inbound_sectionfare)
+                    eng = self.staged_changes[stop_index].get('EngDisplay', stop.EngDisplay)
+                else:
+                    # Access raw values directly to avoid string conversions
+                    osf = stop._raw_Outbound_sectionfare
+                    isf = stop._raw_Inbound_sectionfare
+                    eng = stop.EngDisplay
+                
+                # Block signals while setting values to avoid triggering apply methods
+                self.ui.doubleSpinBox.blockSignals(True)
+                self.ui.doubleSpinBox_2.blockSignals(True)
+                self.ui.english_textbox.blockSignals(True)
+                
+                # Handle both float and potential string values safely
+                try:
+                    osf_val = float(osf) if (isinstance(osf, (int, float)) or (isinstance(osf, str) and osf.replace('.', '').replace('-', '').isdigit())) else -1.0
+                    isf_val = float(isf) if (isinstance(isf, (int, float)) or (isinstance(isf, str) and isf.replace('.', '').replace('-', '').isdigit())) else -1.0
+                except (ValueError, AttributeError):
+                    osf_val = -1.0
+                    isf_val = -1.0
+                
+                self.ui.doubleSpinBox.setValue(osf_val)
+                self.ui.doubleSpinBox_2.setValue(isf_val)
+                self.ui.english_textbox.setText(eng)
+                
+                # Load autoskip state
+                current_name = self.staged_changes[stop_index].get('name', stop.name) if stop_index in self.staged_changes else stop.name
+                props = decode_stop_name(current_name)
+                self.ui.checkBox.setChecked(props.autoskip)
+                
+                self.ui.doubleSpinBox.blockSignals(False)
+                self.ui.doubleSpinBox_2.blockSignals(False)
+                self.ui.english_textbox.blockSignals(False)
+            else:
+                # Multiple or no selection - reset to neutral
+                self.ui.doubleSpinBox.blockSignals(True)
+                self.ui.doubleSpinBox_2.blockSignals(True)
+                self.ui.english_textbox.blockSignals(True)
+                self.ui.checkBox.blockSignals(True)
+                
+                self.ui.doubleSpinBox.setValue(-1.0)
+                self.ui.doubleSpinBox_2.setValue(-1.0)
+                self.ui.english_textbox.clear()
+                self.ui.checkBox.setChecked(False)
+                
+                self.ui.doubleSpinBox.blockSignals(False)
+                self.ui.doubleSpinBox_2.blockSignals(False)
+                self.ui.english_textbox.blockSignals(False)
+                self.ui.checkBox.blockSignals(False)
+            
+            # Update status bar with selection count
+            count = len(selected_items)
+            if count > 0:
+                self.statusBar().showMessage(f"{count} stop(s) selected")
+            else:
+                self.statusBar().clearMessage()
+        
+        def _apply_outbound_fare(self, value: float):
+            """Apply outbound section fare to all selected stops."""
+            selected_items = self.ui.listWidget.selectedItems()
+            if not selected_items:
+                return
+            
+            for item in selected_items:
+                stop_index = item.data(Qt.ItemDataRole.UserRole)
+                
+                # Initialize staged changes for this stop if not exists
+                if stop_index not in self.staged_changes:
+                    self.staged_changes[stop_index] = {}
+                
+                # Stage the change
+                self.staged_changes[stop_index]['Outbound_sectionfare'] = value
+                
+                # Apply visual feedback
+                self._mark_item_modified(item)
+            
+            self.statusBar().showMessage(f"Applied outbound fare ${value:.2f} to {len(selected_items)} stop(s)")
+        
+        def _apply_inbound_fare(self, value: float):
+            """Apply inbound section fare to all selected stops."""
+            selected_items = self.ui.listWidget.selectedItems()
+            if not selected_items:
+                return
+            
+            for item in selected_items:
+                stop_index = item.data(Qt.ItemDataRole.UserRole)
+                
+                # Initialize staged changes for this stop if not exists
+                if stop_index not in self.staged_changes:
+                    self.staged_changes[stop_index] = {}
+                
+                # Stage the change
+                self.staged_changes[stop_index]['Inbound_sectionfare'] = value
+                
+                # Apply visual feedback
+                self._mark_item_modified(item)
+            
+            self.statusBar().showMessage(f"Applied inbound fare ${value:.2f} to {len(selected_items)} stop(s)")
+        
+        def _apply_english_name(self, text: str):
+            """Apply English name to all selected stops."""
+            selected_items = self.ui.listWidget.selectedItems()
+            if not selected_items:
+                return
+            
+            for item in selected_items:
+                stop_index = item.data(Qt.ItemDataRole.UserRole)
+                stop = Main.hof_class.stopreporter[stop_index]
+                
+                # Initialize staged changes for this stop if not exists
+                if stop_index not in self.staged_changes:
+                    self.staged_changes[stop_index] = {}
+                
+                # Stage the English display change
+                self.staged_changes[stop_index]['EngDisplay'] = text
+                
+                # Also update the name suffix if @ count changed
+                current_name = self.staged_changes[stop_index].get('name', stop.name)
+                updated_name = self._recalculate_name_with_eng_display(current_name, text)
+                if updated_name != current_name:
+                    self.staged_changes[stop_index]['name'] = updated_name
+                    item.setText(updated_name)
+                
+                # Apply visual feedback
+                self._mark_item_modified(item)
+            
+            self.statusBar().showMessage(f"Applied English name to {len(selected_items)} stop(s)")
+        
+        def _apply_autoskip(self, state: int):
+            """Apply autoskip setting to all selected stops."""
+            selected_items = self.ui.listWidget.selectedItems()
+            if not selected_items:
+                return
+            
+            autoskip_enabled = (state == Qt.CheckState.Checked.value)
+            
+            for item in selected_items:
+                stop_index = item.data(Qt.ItemDataRole.UserRole)
+                stop = Main.hof_class.stopreporter[stop_index]
+                
+                # Get current or staged values
+                if stop_index in self.staged_changes:
+                    current_name = self.staged_changes[stop_index].get('name', stop.name)
+                    current_eng = self.staged_changes[stop_index].get('EngDisplay', stop.EngDisplay)
+                else:
+                    current_name = stop.name
+                    current_eng = stop.EngDisplay
+                
+                # Decode to get current properties
+                props = decode_stop_name(current_name)
+                base_name = props.base_name
+                
+                # Encode with new autoskip setting (preserve other settings)
+                eng_at_count = current_eng.count('@')
+                new_name = encode_stop_name(base_name, autoskip_enabled, 
+                                           props.w8w6_different, props.chi_pages, 
+                                           eng_at_count)
+                
+                # Stage the change
+                if stop_index not in self.staged_changes:
+                    self.staged_changes[stop_index] = {}
+                self.staged_changes[stop_index]['name'] = new_name
+                
+                # Update listWidget display to show new name immediately
+                item.setText(new_name)
+                self._mark_item_modified(item)
+            
+            status = "enabled" if autoskip_enabled else "disabled"
+            self.statusBar().showMessage(f"Autoskip {status} for {len(selected_items)} stop(s)")
+        
+        def _mark_item_modified(self, item: QListWidgetItem):
+            """Mark a list item as modified with visual feedback."""
+            # Set background color to light yellow
+            item.setBackground(QBrush(QColor(255, 255, 200)))
+            
+            # Add tooltip showing what's changed
+            stop_index = item.data(Qt.ItemDataRole.UserRole)
+            if stop_index in self.staged_changes:
+                changes = self.staged_changes[stop_index]
+                tooltip = "Modified: " + ", ".join(changes.keys())
+                item.setToolTip(tooltip)
+        
+        def _apply_page_config(self, w8w6_different: bool, chi_pages: int):
+            """Apply page configuration to all selected stops."""
+            selected_items = self.ui.listWidget.selectedItems()
+            if not selected_items:
+                return
+            
+            for item in selected_items:
+                stop_index = item.data(Qt.ItemDataRole.UserRole)
+                stop = Main.hof_class.stopreporter[stop_index]
+                
+                # Get current or staged values
+                if stop_index in self.staged_changes:
+                    current_name = self.staged_changes[stop_index].get('name', stop.name)
+                    current_eng = self.staged_changes[stop_index].get('EngDisplay', stop.EngDisplay)
+                else:
+                    current_name = stop.name
+                    current_eng = stop.EngDisplay
+                
+                # Decode to get base name and current autoskip
+                props = decode_stop_name(current_name)
+                base_name = props.base_name
+                autoskip = props.autoskip  # Preserve existing autoskip setting
+                
+                # Encode with new page configuration
+                eng_at_count = current_eng.count('@')
+                new_name = encode_stop_name(base_name, autoskip, w8w6_different, 
+                                           chi_pages, eng_at_count)
+                
+                # Stage the change
+                if stop_index not in self.staged_changes:
+                    self.staged_changes[stop_index] = {}
+                self.staged_changes[stop_index]['name'] = new_name
+                
+                # Update listWidget display to show new name immediately
+                item.setText(new_name)
+                self._mark_item_modified(item)
+            
+            # Create status message based on configuration
+            if w8w6_different:
+                if chi_pages == 3:
+                    config_name = "6w 3 pages, 8w 2 pages (!~)"
+                else:
+                    config_name = "6w 2 pages, 8w 1 page (~)"
+            else:
+                config_name = f"{chi_pages} pages for 6w/8w {'!!' if chi_pages == 3 else '!'}"
+            
+            self.statusBar().showMessage(f"Applied {config_name} to {len(selected_items)} stop(s)")
+        
+        def _recalculate_name_with_eng_display(self, current_name: str, eng_display: str) -> str:
+            """Recalculate stop name based on new English display (for suffix update)."""
+            # Decode current name to extract properties
+            props = decode_stop_name(current_name)
+            
+            # Count @ in new English display
+            eng_at_count = eng_display.count('@')
+            
+            # Re-encode with new @ count to update suffix if needed
+            new_name = encode_stop_name(props.base_name, props.autoskip, 
+                                       props.w8w6_different, props.chi_pages, 
+                                       eng_at_count)
+            
+            return new_name
+        
+        def _revert_changes(self):
+            """Revert all staged changes and restore original state."""
+            # Clear all staged changes
+            self.staged_changes.clear()
+            
+            # Reset all list items to original names and colors
+            for i in range(self.ui.listWidget.count()):
+                item = self.ui.listWidget.item(i)
+                stop_index = item.data(Qt.ItemDataRole.UserRole)
+                original_stop = Main.hof_class.stopreporter[stop_index]
+                
+                # Restore original name
+                item.setText(original_stop.name)
+                
+                # Clear background color
+                item.setBackground(QBrush())
+                
+                # Clear tooltip
+                item.setToolTip("")
+            
+            # Reset input fields to neutral state
+            self.ui.doubleSpinBox.blockSignals(True)
+            self.ui.doubleSpinBox_2.blockSignals(True)
+            self.ui.english_textbox.blockSignals(True)
+            self.ui.checkBox.blockSignals(True)
+            
+            self.ui.doubleSpinBox.setValue(-1.0)
+            self.ui.doubleSpinBox_2.setValue(-1.0)
+            self.ui.english_textbox.clear()
+            self.ui.checkBox.setChecked(False)
+            
+            self.ui.doubleSpinBox.blockSignals(False)
+            self.ui.doubleSpinBox_2.blockSignals(False)
+            self.ui.english_textbox.blockSignals(False)
+            self.ui.checkBox.blockSignals(False)
+            
+            # Clear selection
+            self.ui.listWidget.clearSelection()
+            
+            self.statusBar().showMessage("Reverted all changes")
+        
+        def _confirm_changes(self):
+            """Commit all staged changes to Main.hof_class.stopreporter."""
+            if not self.staged_changes:
+                QMessageBox.information(self, "No Changes", "No changes to commit.")
+                return
+            
+            # Ask for confirmation
+            reply = QMessageBox.question(self, "Confirm Changes",
+                f"Apply changes to {len(self.staged_changes)} stop(s)?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            
+            # Apply all staged changes to Main.hof_class.stopreporter
+            for stop_index, changes in self.staged_changes.items():
+                stop = Main.hof_class.stopreporter[stop_index]
+                
+                # Apply each modified property
+                if 'name' in changes:
+                    stop.name = changes['name']
+                if 'EngDisplay' in changes:
+                    stop.EngDisplay = changes['EngDisplay']
+                if 'Outbound_sectionfare' in changes:
+                    stop.Outbound_sectionfare = changes['Outbound_sectionfare']
+                if 'Inbound_sectionfare' in changes:
+                    stop.Inbound_sectionfare = changes['Inbound_sectionfare']
+            
+            # Notify parent HOFView to refresh all stopreporter displays
+            if self.hofview and hasattr(self.hofview, 'ui') and hasattr(self.hofview.ui, 'listWidget_3'):
+                # Refresh all items in HOFView's stopreporter listWidget
+                for i in range(self.hofview.ui.listWidget_3.count()):
+                    self.hofview.ui.listWidget_3.item(i).setText(
+                        Main.hof_class.stopreporter[i].name
+                    )
+            
+            # Show success message
+            QMessageBox.information(self, "Success", 
+                f"Successfully applied changes to {len(self.staged_changes)} stop(s).")
+            
+            # Clear staged changes after committing
+            self.staged_changes.clear()
+            
+            # Close dialog
+            self.close()
 
 
 

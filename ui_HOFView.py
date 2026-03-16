@@ -54,6 +54,8 @@ class Ui_MainWindow(object):
         self.actionExport_HOF_v2.setObjectName(u"actionExport_HOF_v2")
         self.actionReset_Busstop_List_IDs = QAction(MainWindow)
         self.actionReset_Busstop_List_IDs.setObjectName(u"actionReset_Busstop_List_IDs")
+        self.actionEdit_En_Masse = QAction(MainWindow)
+        self.actionEdit_En_Masse.setObjectName(u"actionEdit_En_Masse")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.gridLayout_3 = QGridLayout(self.centralwidget)
@@ -490,6 +492,7 @@ class Ui_MainWindow(object):
         self.menuEdit.addAction(self.actionImport_Busstops_from_list)
         self.menuEdit.addAction(self.actionEric_Guesser)
         self.menuEdit.addAction(self.actionReset_Busstop_List_IDs)
+        self.menuEdit.addAction(self.actionEdit_En_Masse)
 
         self.retranslateUi(MainWindow)
 
@@ -517,6 +520,7 @@ class Ui_MainWindow(object):
         self.actionExport_HOF_v2.setWhatsThis(QCoreApplication.translate("MainWindow", u"A smaller HOF File. Hopefully.", None))
 #endif // QT_CONFIG(whatsthis)
         self.actionReset_Busstop_List_IDs.setText(QCoreApplication.translate("MainWindow", u"Reset Busstop List IDs", None))
+        self.actionEdit_En_Masse.setText(QCoreApplication.translate("MainWindow", u"Edit En Masse", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"Termini", None))
         self.pushButton_13.setText(QCoreApplication.translate("MainWindow", u"Duplicate", None))
 #if QT_CONFIG(tooltip)

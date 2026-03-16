@@ -628,7 +628,7 @@ $stoplist2
         return returnstring
     def show_hof_v2(self) -> str:
         self._sync_stopreporter_parent()
-        list_termini = [self.termini_template_v2.substitute(allexit="{ALLEX}" if i.allexit == '_allexit' else "", eric=i.eric, destination=i.destination, busfull=i.busfull, pai_page4=i.flip[3] if len(i.flip) > 3 else '', pai_page3=i.flip[2] if len(i.flip) > 2 else '', pai_page2=i.flip[1] if len(i.flip) > 1 else '', pai_page1=i.flip[0] if len(i.flip) > 0 else '', RTID=str(i.RTID)) for i in self.termini]
+        list_termini = [self.termini_template_v2.substitute(allexit="{ALLEX}" if i.allexit == '_allexit' else "", eric=i._eric.retstr(), destination=i.destination, busfull=i.busfull, pai_page4=i.flip[3] if len(i.flip) > 3 else '', pai_page3=i.flip[2] if len(i.flip) > 2 else '', pai_page2=i.flip[1] if len(i.flip) > 1 else '', pai_page1=i.flip[0] if len(i.flip) > 0 else '', RTID=str(i.RTID)) for i in self.termini]
         list_stopreporter = [self.stopreporter_template_v2.substitute(name=i.name, EngDisplay=i.EngDisplay, Line2String=i.Line2String, Outbound_sectionfare=i.Outbound_sectionfare, Inbound_sectionfare=i.Inbound_sectionfare, comment=i.comment) for i in self.stopreporter]
         list_ddu = [self.ddu_template_v2.substitute(RTNO=i.RTNO, Outbound_dir=i.Outbound_dir, sectiontimes_Y=i.sectiontimes_Y, Inbound_dir=i.Inbound_dir, sectiontimes_Z=i.sectiontimes_Z, Outbound_price=i.Outbound_price, Inbound_price=i.Inbound_price) for i in self.ddu]
         returnstring = '\n'.join([
