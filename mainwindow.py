@@ -2205,6 +2205,7 @@ class Main(QMainWindow):
             # Connect Revert and Confirm buttons
             self.ui.pushButton_6.clicked.connect(self._revert_changes)
             self.ui.pushButton_7.clicked.connect(self._confirm_changes)
+            self.ui.pushButton_3.clicked.connect(self._duplicate_selected_stops)
 
             # Initialize spinboxes to neutral values
             self.ui.doubleSpinBox.setValue(-1.0)
@@ -2587,6 +2588,70 @@ class Main(QMainWindow):
 
             self.statusBar().showMessage(
                 f"Applied {config_name} to {len(selected_items)} stop(s)"
+            )
+
+        def _duplicate_selected_stops(self):
+            """Duplicate selected stops with # as the only prefix and fixed English text."""
+            selected_items = self.ui.listWidget.selectedItems()
+            if not selected_items:
+                QMessageBox.warning(
+                    self,
+                    "No Selection",
+                    "Please select at least one stop to duplicate.",
+                )
+                return
+
+            new_stops = []
+            for item in selected_items:
+                stop_index = item.data(Qt.ItemDataRole.UserRole)
+                original = Main.hof_class.stopreporter[stop_index]
+
+                # Drop all existing encoding prefixes and enforce a single # prefix.
+                base_name = decode_stop_name(original.name).base_name.lstrip("#")
+                new_name = f"#{base_name}"
+
+                Main.hof_class.add_stopreporter(
+                    name=new_name,
+                    EngDisplay="THANK YOU@FOR TRAVELLING",
+                    ChiSeconds=original.ChiSeconds,
+                    EngSeconds=original.EngSeconds,
+                    ManSeconds=original.ManSeconds,
+                    Outbound_sectionfare=original._raw_Outbound_sectionfare,
+                    Inbound_sectionfare=original._raw_Inbound_sectionfare,
+                    comment=original._comment,
+                )
+                new_stops.append(Main.hof_class.stopreporter[-1])
+
+            self._load_stops()
+
+            # Select newly appended duplicates for quick follow-up edits.
+            self._persisted_selection = set(
+                range(
+                    len(Main.hof_class.stopreporter) - len(new_stops),
+                    len(Main.hof_class.stopreporter),
+                )
+            )
+            self._restore_selection_if_possible()
+
+            # Keep the parent HOF view list in sync with immediately-added stops.
+            if (
+                self.hofview
+                and hasattr(self.hofview, "ui")
+                and hasattr(self.hofview.ui, "listWidget_3")
+            ):
+                start_index = len(Main.hof_class.stopreporter) - len(new_stops)
+                for offset, stop in enumerate(new_stops):
+                    hof_item = QListWidgetItem(stop.name)
+                    hof_item.setData(Qt.ItemDataRole.UserRole, stop.busstopID)
+                    self.hofview.ui.listWidget_3.addItem(hof_item)
+
+                    if hasattr(self.hofview, "busstop_id_to_index"):
+                        self.hofview.busstop_id_to_index[stop.busstopID] = (
+                            start_index + offset
+                        )
+
+            self.statusBar().showMessage(
+                f"Duplicated {len(new_stops)} stop(s): prefixes reset to '#' and English updated"
             )
 
         def _recalculate_name_with_eng_display(
