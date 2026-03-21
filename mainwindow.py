@@ -153,6 +153,17 @@ class Main(QMainWindow):
             QMessageBox.warning(None, "Error", case[a], QMessageBox.Ok)  # type: ignore
 
     @staticmethod
+    def show_parse_warnings(warnings: list[str]) -> None:
+        if len(warnings) < 1:
+            return
+        max_lines = 15
+        shown = "\n".join(warnings[:max_lines])
+        extra = ""
+        if len(warnings) > max_lines:
+            extra = f"\n... and {len(warnings) - max_lines} more warning(s)."
+        QMessageBox.warning(None, "HOF Loaded With Warnings", f"Some fields could not be read and were replaced with minimum defaults:\n\n{shown}{extra}", QMessageBox.Ok)  # type: ignore
+
+    @staticmethod
     def exhaust_guesses(code):
         """Exhausts all guesses of the eric code, returns a list of all guesses with reasonableness scores"""
         mapping = {
@@ -388,7 +399,14 @@ class Main(QMainWindow):
             )
             if file[0]:
                 a = Main.hof_class.load_from_hof(file[0])
-                Main.test_error_codes(a)
+                parse_warnings: list[str] = []
+                if isinstance(a, int):
+                    Main.test_error_codes(a)
+                    return
+                if isinstance(a, tuple):
+                    parse_warnings = a[1]
+                if parse_warnings:
+                    Main.show_parse_warnings(parse_warnings)
                 # considering that the load_from_hof function can fail due to encoding issues, we should check its return value before proceeding
                 Main.opened_windows.append(Main.HOFView())
                 Main.opened_windows[-1].show()
@@ -752,7 +770,14 @@ class Main(QMainWindow):
                 Main.hof_class.ddu.clear()
                 Main.hof_class.infosystem.clear()
                 a = Main.hof_class.load_from_hof(file[0])
-                Main.test_error_codes(a)
+                parse_warnings: list[str] = []
+                if isinstance(a, int):
+                    Main.test_error_codes(a)
+                    return
+                if isinstance(a, tuple):
+                    parse_warnings = a[1]
+                if parse_warnings:
+                    Main.show_parse_warnings(parse_warnings)
                 self.close()
                 Main.opened_windows.append(Main.HOFView())
                 Main.opened_windows[-1].show()
@@ -836,6 +861,24 @@ class Main(QMainWindow):
                 3: (Main.hof_class.termini, self.ui.listWidget_5),
                 4: (Main.hof_class.infosystem, self.ui.listWidget_2),
             }
+
+            def _remove_all_occurrences(
+                stop_list_obj, target_stop_id: str, target_stop_name: str
+            ) -> None:
+                matched_indices = [
+                    idx
+                    for idx, (stop_name, stop_id) in enumerate(
+                        zip(stop_list_obj._busstops, stop_list_obj.bustops_withid)
+                    )
+                    if stop_id == target_stop_id
+                    or (stop_id == "" and stop_name == target_stop_name)
+                ]
+
+                for idx in reversed(matched_indices):
+                    stop_list_obj._busstops.pop(idx)
+                    stop_list_obj.bustops_withid.pop(idx)
+                stop_list_obj.amount_of_stops = len(stop_list_obj._busstops)
+
             if stuff == 1:
                 ite = self.ui.listWidget_3.currentIndex()
                 index = ite.row()
@@ -847,22 +890,12 @@ class Main(QMainWindow):
                         if value > cur_index:
                             self.busstop_id_to_index[key] -= 1
                 for i in Main.hof_class.infosystem:
-                    if bs_obj.busstopID in i.busstop_list1_class.bustops_withid:
-                        index_to_remove = i.busstop_list1_class.bustops_withid.index(
-                            bs_obj.busstopID
-                        )
-                        i.busstop_list1_class._busstops.pop(index_to_remove)
-                        i.busstop_list1_class.bustops_withid.pop(index_to_remove)
-                        # i.busstop_list1_class._busstops.remove(bs_obj.name)
-                        # i.busstop_list1_class.bustops_withid.remove(bs_obj.busstopID)
-                    if bs_obj.busstopID in i.busstop_list2_class.bustops_withid:
-                        index_to_remove = i.busstop_list2_class.bustops_withid.index(
-                            bs_obj.busstopID
-                        )
-                        i.busstop_list2_class._busstops.pop(index_to_remove)
-                        i.busstop_list2_class.bustops_withid.pop(index_to_remove)
-                        # i.busstop_list2_class._busstops.remove(bs_obj.name)
-                        # i.busstop_list2_class.bustops_withid.remove(bs_obj.busstopID)
+                    _remove_all_occurrences(
+                        i.busstop_list1_class, bs_obj.busstopID, bs_obj.name
+                    )
+                    _remove_all_occurrences(
+                        i.busstop_list2_class, bs_obj.busstopID, bs_obj.name
+                    )
                 print()
                 Main.hof_class.stopreporter.pop(index)
                 self.ui.listWidget_3.takeItem(index)

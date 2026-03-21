@@ -811,11 +811,64 @@ $stoplist2
         database_file.close()
         print(f"Loaded from {filename}")
 
-    def load_from_hof(self, filename: str) -> None | int:
+    def load_from_hof(self, filename: str) -> None | int | tuple[None, list[str]]:
         bsl_v2 = False
         tls_v2 = False
         try:
             hof_entry = HOF_Hanover()
+            parse_warnings: list[str] = []
+
+            def _add_warning(field_name: str, raw_value: str, fallback_value: int | float, line_index: int) -> None:
+                parse_warnings.append(
+                    f"Line {line_index + 1}: {field_name} failed to read from '{raw_value}', using fallback {fallback_value}."
+                )
+
+            def _safe_non_negative_int(raw_value: str, field_name: str, line_index: int, allow_ns: bool = False) -> int:
+                if allow_ns and raw_value == "NS":
+                    return 0
+                try:
+                    value = int(raw_value)
+                except (TypeError, ValueError):
+                    _add_warning(field_name, str(raw_value), 0, line_index)
+                    return 0
+                if value < 0:
+                    _add_warning(field_name, str(raw_value), 0, line_index)
+                    return 0
+                return value
+
+            def _safe_ddu_section(raw_value: str, field_name: str, line_index: int) -> int:
+                if not isinstance(raw_value, str) or len(raw_value) < 1:
+                    _add_warning(field_name, str(raw_value), 0, line_index)
+                    return 0
+                suffix = raw_value[-1]
+                if not suffix.isdigit():
+                    _add_warning(field_name, str(raw_value), 0, line_index)
+                    return 0
+                return _safe_non_negative_int(suffix, field_name, line_index)
+
+            def _safe_price(
+                raw_value: str,
+                field_name: str,
+                line_index: int,
+                fallback_value: float,
+                allow_missing_prefix: bool,
+            ) -> float:
+                if not isinstance(raw_value, str):
+                    _add_warning(field_name, str(raw_value), fallback_value, line_index)
+                    return fallback_value
+                if not raw_value.startswith('$'):
+                    if raw_value and not allow_missing_prefix:
+                        _add_warning(field_name, raw_value, fallback_value, line_index)
+                    return fallback_value
+                try:
+                    value = float(raw_value.replace(",", ".").lstrip('$'))
+                except (TypeError, ValueError):
+                    _add_warning(field_name, raw_value, fallback_value, line_index)
+                    return fallback_value
+                if value < fallback_value:
+                    _add_warning(field_name, raw_value, fallback_value, line_index)
+                    return fallback_value
+                return value
             try:
                 with open(filename, 'r',encoding="utf-8") as f:
                     lines = [line.strip() for line in f]
@@ -879,26 +932,26 @@ $stoplist2
                     if len(stop_name) < 1:
                         i += 1
                         continue
-                    if len(stop_name) >= 5 or (len(time_parts := datum[1].split()) <= 2 and time_parts[0].isdigit()):
+                    if len(stop_name) >= 5 or (len(time_parts := datum[1].split()) <= 2 and len(time_parts) > 0 and time_parts[0].isdigit()):
                         # parse full stopreporter
                         chi_sec, eng_sec, man_sec = 0, 0, 0
                         time_parts = datum[1].split()
                         if time_parts == ["NoSound"]:
                             chi_sec, eng_sec, man_sec = 0,0,0
                         else:
-                            if len(time_parts) >= 1 and time_parts[0].isdigit():
-                                chi_sec = int(time_parts[0])
-                            elif len(time_parts) >= 1 and time_parts[0] == "NS":
-                                chi_sec = 0
-                            if len(time_parts) >= 2 and time_parts[1].isdigit():
-                                eng_sec = int(time_parts[1])
-                            elif len(time_parts) >= 2 and time_parts[1] == "NS":
-                                eng_sec = 0
+                            if len(time_parts) >= 1:
+                                chi_sec = _safe_non_negative_int(time_parts[0], "ChiSeconds", i, allow_ns=True)
+                            if len(time_parts) >= 2:
+                                eng_sec = _safe_non_negative_int(time_parts[1], "EngSeconds", i, allow_ns=True)
                             if len(time_parts) == 3:
-                                if time_parts[2].isdigit():
-                                    man_sec = int(time_parts[2]) - chi_sec - eng_sec
-                                elif time_parts[2] == "NS":
+                                if time_parts[2] == "NS":
                                     man_sec = 0
+                                else:
+                                    total_sec = _safe_non_negative_int(time_parts[2], "TotalSeconds", i)
+                                    man_sec = total_sec - chi_sec - eng_sec
+                                    if man_sec < 0:
+                                        _add_warning("ManSeconds", time_parts[2], 0, i)
+                                        man_sec = 0
                         # if len(time_parts) >= 1 and time_parts[0].isdigit():
                         #     chi_sec = int(time_parts[0])
                         # elif 
@@ -907,16 +960,26 @@ $stoplist2
                         # if len(time_parts) == 3:
                         #     man_sec = int(time_parts[2]) - chi_sec - eng_sec
                         inbound_price = -1.0
-                        if datum[2].startswith('$'):
-                            inbound_price = float(datum[2].lstrip('$'))
-                            # print(inbound_price)
+                        if len(datum) > 2:
+                            inbound_price = _safe_price(
+                                datum[2],
+                                "Inbound_sectionfare",
+                                i,
+                                -1.0,
+                                allow_missing_prefix=False,
+                            )
                         outbound_price = -1.0
-                        if datum[3].startswith('$'):
-                            outbound_price = float(datum[3].lstrip('$'))
-                            # print("op",outbound_price)
+                        if len(datum) > 3:
+                            outbound_price = _safe_price(
+                                datum[3],
+                                "Outbound_sectionfare",
+                                i,
+                                -1.0,
+                                allow_missing_prefix=False,
+                            )
                         hof_entry.add_stopreporter(
                             stop_name,
-                            datum[4],
+                            datum[4] if len(datum) > 4 else "",
                             chi_sec,
                             eng_sec,
                             man_sec,
@@ -928,14 +991,28 @@ $stoplist2
                         i += 6
                     else:
                         # parse DDU
-                        sectiontimes_Y = int(datum[1][-1])
-                        sectiontimes_Z = int(datum[2][-1])
-                        inbound_price = float(datum[3].lstrip('$')) if datum[3].startswith('$') else 0.0
-                        outbound_price = float(datum[4].lstrip('$')) if datum[4].startswith('$') else 0.0
+                        outbound_dir_raw = datum[1] if len(datum) > 1 else ""
+                        inbound_dir_raw = datum[2] if len(datum) > 2 else ""
+                        sectiontimes_Y = _safe_ddu_section(outbound_dir_raw, "sectiontimes_Y", i)
+                        sectiontimes_Z = _safe_ddu_section(inbound_dir_raw, "sectiontimes_Z", i)
+                        inbound_price = _safe_price(
+                            datum[3] if len(datum) > 3 else "",
+                            "Inbound_price",
+                            i,
+                            0.0,
+                            allow_missing_prefix=True,
+                        )
+                        outbound_price = _safe_price(
+                            datum[4] if len(datum) > 4 else "",
+                            "Outbound_price",
+                            i,
+                            0.0,
+                            allow_missing_prefix=True,
+                        )
                         hof_entry.add_ddu(
                             stop_name,
-                            datum[1][:-1].strip(),
-                            datum[2][:-1].strip(),
+                            outbound_dir_raw[:-1].strip(),
+                            inbound_dir_raw[:-1].strip(),
                             inbound_price,
                             outbound_price,
                             sectiontimes_Y,
@@ -999,7 +1076,7 @@ $stoplist2
                     if len(stop_name) < 1:
                         i +=1
                         continue
-                    if len(stop_name) >= 5 or (len(time_parts := lines[i + 3].split()) <= 2 and time_parts[0].isdigit()):
+                    if len(stop_name) >= 5 or (len(time_parts := lines[i + 3].split()) <= 2 and len(time_parts) > 0 and time_parts[0].isdigit()):
                         print(stop_name, lines[i + 3])
                         time_parts = lines[i + 3].split()
                         print(time_parts)
@@ -1008,28 +1085,36 @@ $stoplist2
                         if time_parts == ["NoSound"]:
                             pass
                         else:
-                            if len(time_parts) >= 1 and time_parts[0].isdigit():
-                                chi_sec = int(time_parts[0])
-                            elif len(time_parts) >= 1 and time_parts[0] == "NS":
-                                chi_sec = 0
-                            if len(time_parts) >= 2 and time_parts[1].isdigit():
-                                eng_sec = int(time_parts[1])
-                            elif len(time_parts) >= 2 and time_parts[1] == "NS":
-                                eng_sec = 0
+                            if len(time_parts) >= 1:
+                                chi_sec = _safe_non_negative_int(time_parts[0], "ChiSeconds", i + 3, allow_ns=True)
+                            if len(time_parts) >= 2:
+                                eng_sec = _safe_non_negative_int(time_parts[1], "EngSeconds", i + 3, allow_ns=True)
                             if len(time_parts) == 3:
-                                if time_parts[2].isdigit():
-                                    man_sec = int(time_parts[2]) - chi_sec - eng_sec
-                                elif time_parts[2] == "NS":
-                                    man_sec = -1
+                                if time_parts[2] == "NS":
+                                    man_sec = 0
+                                else:
+                                    total_sec = _safe_non_negative_int(time_parts[2], "TotalSeconds", i + 3)
+                                    man_sec = total_sec - chi_sec - eng_sec
+                                    if man_sec < 0:
+                                        _add_warning("ManSeconds", time_parts[2], 0, i + 3)
+                                        man_sec = 0
                         inbound_price = -1.0
-                        if lines[i + 4].startswith('$'):
-                            inbound_price = float(lines[i + 4].replace(",",".").lstrip('$'))
-                            # print(inbound_price)
+                        inbound_price = _safe_price(
+                            lines[i + 4],
+                            "Inbound_sectionfare",
+                            i + 4,
+                            -1.0,
+                            allow_missing_prefix=False,
+                        )
                         outbound_price = -1.0
-                        if lines[i + 5].startswith('$'):
-                            outbound_price = float(lines[i + 5].replace(",",".").lstrip('$'))
-                            # print("op",outbound_price)
-                        if len(lines[i + 2]) > 0 and ((lines[i + 2][-1] in ['T','Y','Z','R'] or len(lines[i + 2]) <= 3 ) and lines[i + 2][:-1].strip().isdigit() and (time_parts != ["NoSound"] and (not time_parts[0].isnumeric() and len(time_parts) <= 3))):
+                        outbound_price = _safe_price(
+                            lines[i + 5],
+                            "Outbound_sectionfare",
+                            i + 5,
+                            -1.0,
+                            allow_missing_prefix=False,
+                        )
+                        if len(lines[i + 2]) > 0 and ((lines[i + 2][-1] in ['T','Y','Z','R'] or len(lines[i + 2]) <= 3 ) and lines[i + 2][:-1].strip().isdigit() and (time_parts != ["NoSound"] and len(time_parts) > 0 and (not time_parts[0].isnumeric() and len(time_parts) <= 3))):
                             # Telargo! Not supported
                             return 990
                         hof_entry.add_stopreporter(
@@ -1051,10 +1136,22 @@ $stoplist2
                         # print(lines[i+3])
                         # print(lines[i+4])
                         # print(lines[i+5])
-                        sectiontimes_Y = int(lines[i + 2][-1])
-                        sectiontimes_Z = int(lines[i + 3][-1])
-                        inbound_price = float(lines[i + 4].lstrip('$')) if lines[i + 4].startswith('$') else 0.0
-                        outbound_price = float(lines[i + 5].lstrip('$')) if lines[i + 5].startswith('$') else 0.0
+                        sectiontimes_Y = _safe_ddu_section(lines[i + 2], "sectiontimes_Y", i + 2)
+                        sectiontimes_Z = _safe_ddu_section(lines[i + 3], "sectiontimes_Z", i + 3)
+                        inbound_price = _safe_price(
+                            lines[i + 4],
+                            "Inbound_price",
+                            i + 4,
+                            0.0,
+                            allow_missing_prefix=True,
+                        )
+                        outbound_price = _safe_price(
+                            lines[i + 5],
+                            "Outbound_price",
+                            i + 5,
+                            0.0,
+                            allow_missing_prefix=True,
+                        )
                         hof_entry.add_ddu(
                             stop_name,
                             lines[i + 2][:-1].strip(),
@@ -1078,7 +1175,7 @@ $stoplist2
                     if len(self.infosystem) > 0 and self.infosystem[-1].route == lines[i + 2]:
                         
                         startidx = i + 3
-                        endidx = startidx + int(lines[i + 1])
+                        endidx = startidx + _safe_non_negative_int(lines[i + 1], "infosystem_busstop_count", i + 1)
                         # print(lines[startidx:endidx])
                         self.infosystem[-1].busstop_list2_class.busstops = lines[startidx:endidx]
                         self.infosystem[-1].busstop_list2 = lines[startidx:endidx]
@@ -1089,7 +1186,7 @@ $stoplist2
                         self.infosystem[-1].trip2_class.Destination = lines[startidx:endidx][-2] if len(lines[startidx:endidx]) > 1 else ""
                         i = endidx
                     else:
-                        busstop_count_1 = int(lines[i + 1])
+                        busstop_count_1 = _safe_non_negative_int(lines[i + 1], "infosystem_busstop_count", i + 1) - 1
                         rtno = lines[i + 2]
                         startidx = i + 3
                         endidx = startidx + busstop_count_1
@@ -1141,6 +1238,8 @@ $stoplist2
         # lsa = [i.busstopID for i in self.stopreporter]
         
         print(f"Loaded from {filename}")
+        if parse_warnings:
+            return (None, parse_warnings)
 
     def new_from_map(self, map_location: str) -> None:
         r"""
