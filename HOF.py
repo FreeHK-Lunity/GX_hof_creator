@@ -842,7 +842,7 @@ $stoplist2
                     return 0
                 suffix = raw_value[-1]
                 if not suffix.isdigit():
-                    _add_warning(field_name, str(raw_value), 0, line_index)
+                    # _add_warning(field_name, str(raw_value), 0, line_index) # Allow non-digit suffixes (e.g., "NoSound") but treat them as 0q
                     return 0
                 return _safe_non_negative_int(suffix, field_name, line_index)
 
