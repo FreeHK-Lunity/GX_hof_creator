@@ -858,7 +858,8 @@ $stoplist2
                     return fallback_value
                 if not raw_value.startswith('$'):
                     if raw_value and not allow_missing_prefix:
-                        _add_warning(field_name, raw_value, fallback_value, line_index)
+                        # _add_warning(field_name, raw_value, fallback_value, line_index) # Allow values without '$' but log a warning
+                        pass
                     return fallback_value
                 try:
                     value = float(raw_value.replace(",", ".").lstrip('$'))
