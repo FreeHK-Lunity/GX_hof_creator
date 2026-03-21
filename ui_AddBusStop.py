@@ -24,8 +24,8 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(309, 400)
-        MainWindow.setMinimumSize(QSize(0, 400))
+        MainWindow.resize(388, 432)
+        MainWindow.setMinimumSize(QSize(388, 432))
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.gridLayout = QGridLayout(self.centralwidget)
@@ -87,6 +87,11 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_2.addWidget(self.label_9)
 
+        self.label_12 = QLabel(self.centralwidget)
+        self.label_12.setObjectName(u"label_12")
+
+        self.verticalLayout_2.addWidget(self.label_12)
+
 
         self.gridLayout.addLayout(self.verticalLayout_2, 0, 0, 1, 1)
 
@@ -114,7 +119,7 @@ class Ui_MainWindow(object):
 
         self.spinBox_3 = QSpinBox(self.centralwidget)
         self.spinBox_3.setObjectName(u"spinBox_3")
-        self.spinBox_3.setMinimum(-1)
+        self.spinBox_3.setMinimum(-100)
 
         self.verticalLayout.addWidget(self.spinBox_3)
 
@@ -153,13 +158,19 @@ class Ui_MainWindow(object):
 
         self.verticalLayout.addWidget(self.pushButton)
 
+        self.lineEdit_3 = QLineEdit(self.centralwidget)
+        self.lineEdit_3.setObjectName(u"lineEdit_3")
+        self.lineEdit_3.setReadOnly(False)
+
+        self.verticalLayout.addWidget(self.lineEdit_3)
+
 
         self.gridLayout.addLayout(self.verticalLayout, 0, 1, 1, 1)
 
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 309, 21))
+        self.menubar.setGeometry(QRect(0, 0, 388, 21))
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QStatusBar(MainWindow)
         self.statusbar.setObjectName(u"statusbar")
@@ -176,13 +187,14 @@ class Ui_MainWindow(object):
         self.label_10.setText(QCoreApplication.translate("MainWindow", u"English Display", None))
         self.label_8.setText(QCoreApplication.translate("MainWindow", u"Chi Recording Seconds", None))
         self.label_6.setText(QCoreApplication.translate("MainWindow", u"Eng Recording Seconds", None))
-        self.label_7.setText(QCoreApplication.translate("MainWindow", u"Mandarin Recording Seconds", None))
+        self.label_7.setText(QCoreApplication.translate("MainWindow", u"Mandarin/-Full Recording Seconds", None))
         self.label_3.setText(QCoreApplication.translate("MainWindow", u"Outbound Section Fare", None))
         self.label_2.setText(QCoreApplication.translate("MainWindow", u"Inbound Section Fare", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"Autoskip?", None))
         self.label_4.setText(QCoreApplication.translate("MainWindow", u"8w6w different? (8w page -1)", None))
         self.label_11.setText(QCoreApplication.translate("MainWindow", u"Chi Pages", None))
         self.label_9.setText(QCoreApplication.translate("MainWindow", u"Check Routes that this stop is in", None))
+        self.label_12.setText(QCoreApplication.translate("MainWindow", u"Encoded Stop name", None))
         self.checkBox.setText("")
         self.checkBox_8w6w.setText("")
         self.pushButton.setText(QCoreApplication.translate("MainWindow", u"PushButton", None))

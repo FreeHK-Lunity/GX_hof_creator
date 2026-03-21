@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'Welc.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.0
+## Created by: Qt User Interface Compiler version 6.7.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -26,14 +26,14 @@ class Ui_MainWindow(object):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
         MainWindow.setEnabled(True)
-        MainWindow.resize(636, 326)
+        MainWindow.resize(800, 326)
         sizePolicy = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(MainWindow.sizePolicy().hasHeightForWidth())
         MainWindow.setSizePolicy(sizePolicy)
-        MainWindow.setMinimumSize(QSize(636, 326))
-        MainWindow.setMaximumSize(QSize(636, 326))
+        MainWindow.setMinimumSize(QSize(800, 326))
+        MainWindow.setMaximumSize(QSize(800, 326))
         MainWindow.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         MainWindow.setTabShape(QTabWidget.TabShape.Rounded)
         MainWindow.setUnifiedTitleAndToolBarOnMac(False)
@@ -89,6 +89,11 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout.addWidget(self.pushButton_4)
 
+        self.pushButton_3 = QPushButton(self.horizontalLayoutWidget)
+        self.pushButton_3.setObjectName(u"pushButton_3")
+
+        self.horizontalLayout.addWidget(self.pushButton_3)
+
         self.pushButton_2 = QPushButton(self.horizontalLayoutWidget)
         self.pushButton_2.setObjectName(u"pushButton_2")
 
@@ -109,7 +114,7 @@ class Ui_MainWindow(object):
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 636, 21))
+        self.menubar.setGeometry(QRect(0, 0, 800, 21))
         self.menuFile = QMenu(self.menubar)
         self.menuFile.setObjectName(u"menuFile")
         self.menuMap = QMenu(self.menubar)
@@ -150,6 +155,7 @@ class Ui_MainWindow(object):
         self.actionGenerate_DPIPv2.setText(QCoreApplication.translate("MainWindow", u"Generate DPIPv2", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"GX Hof Creator", None))
         self.pushButton_4.setText(QCoreApplication.translate("MainWindow", u"New Project", None))
+        self.pushButton_3.setText(QCoreApplication.translate("MainWindow", u"Import from Map", None))
         self.pushButton_2.setText(QCoreApplication.translate("MainWindow", u"Open a GHC .db", None))
         self.pushButton.setText(QCoreApplication.translate("MainWindow", u"Open HOF", None))
         self.menuFile.setTitle(QCoreApplication.translate("MainWindow", u"File", None))

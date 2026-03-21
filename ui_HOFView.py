@@ -17,8 +17,8 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QGridLayout,
-    QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QMainWindow, QMenu, QMenuBar, QPlainTextEdit,
+    QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QListWidgetItem, QMainWindow, QMenu, QMenuBar,
     QPushButton, QSizePolicy, QSpacerItem, QStatusBar,
     QToolButton, QVBoxLayout, QWidget)
 
@@ -26,8 +26,8 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(729, 813)
-        MainWindow.setMinimumSize(QSize(625, 810))
+        MainWindow.resize(729, 834)
+        MainWindow.setMinimumSize(QSize(625, 834))
         self.actionOpen_Project_Folder = QAction(MainWindow)
         self.actionOpen_Project_Folder.setObjectName(u"actionOpen_Project_Folder")
         self.actionOpen_HOF = QAction(MainWindow)
@@ -90,13 +90,6 @@ class Ui_MainWindow(object):
         self.pushButton_13.setMaximumSize(QSize(60, 23))
 
         self.gridLayout.addWidget(self.pushButton_13, 2, 6, 1, 1)
-
-        self.Search = QPlainTextEdit(self.centralwidget)
-        self.Search.setObjectName(u"Search")
-        self.Search.setMaximumSize(QSize(16777215, 22))
-        self.Search.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        self.gridLayout.addWidget(self.Search, 4, 0, 1, 3)
 
         self.pushButton_8 = QPushButton(self.centralwidget)
         self.pushButton_8.setObjectName(u"pushButton_8")
@@ -273,6 +266,11 @@ class Ui_MainWindow(object):
 
 
         self.gridLayout.addLayout(self.horizontalLayout_4, 4, 6, 1, 1)
+
+        self.Search = QLineEdit(self.centralwidget)
+        self.Search.setObjectName(u"Search")
+
+        self.gridLayout.addWidget(self.Search, 4, 0, 1, 3)
 
 
         self.gridLayout_2.addLayout(self.gridLayout, 0, 0, 1, 6)
@@ -523,19 +521,6 @@ class Ui_MainWindow(object):
         self.actionEdit_En_Masse.setText(QCoreApplication.translate("MainWindow", u"Edit En Masse", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"Termini", None))
         self.pushButton_13.setText(QCoreApplication.translate("MainWindow", u"Duplicate", None))
-#if QT_CONFIG(tooltip)
-        self.Search.setToolTip(QCoreApplication.translate("MainWindow", u"Search...", None))
-#endif // QT_CONFIG(tooltip)
-#if QT_CONFIG(statustip)
-        self.Search.setStatusTip(QCoreApplication.translate("MainWindow", u"Search...", None))
-#endif // QT_CONFIG(statustip)
-#if QT_CONFIG(whatsthis)
-        self.Search.setWhatsThis(QCoreApplication.translate("MainWindow", u"Search...", None))
-#endif // QT_CONFIG(whatsthis)
-#if QT_CONFIG(accessibility)
-        self.Search.setAccessibleName(QCoreApplication.translate("MainWindow", u"Search...", None))
-#endif // QT_CONFIG(accessibility)
-        self.Search.setPlainText("")
         self.pushButton_8.setText(QCoreApplication.translate("MainWindow", u"Remove", None))
         self.pushButton_14.setText(QCoreApplication.translate("MainWindow", u"Add", None))
         self.label_2.setText(QCoreApplication.translate("MainWindow", u"Bus Stops", None))

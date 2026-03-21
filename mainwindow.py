@@ -365,7 +365,7 @@ class Main(QMainWindow):
             self.ui.actionOpen_HOF.triggered.connect(self.open_hof)
             self.ui.pushButton.clicked.connect(self.open_hof)
             self.ui.pushButton_2.clicked.connect(self.open_db)
-            # self.ui.pushButton_3.clicked.connect(self.open_globalcfg) Goodbye Map Import
+            self.ui.pushButton_3.clicked.connect(self.import_from_map)
             self.ui.pushButton_4.clicked.connect(self.create_blank_hof)
 
         def open_db(self):
@@ -397,6 +397,22 @@ class Main(QMainWindow):
 
         def open_globalcfg(self):
             Main.raise_unimplemented()
+
+        def import_from_map(self):
+            """Import HOF data from an OMSI 2 map directory"""
+            file = QFileDialog.getExistingDirectory(
+                self, "Select OMSI 2 Map Directory", "C:\\"
+            )
+            if file:
+                try:
+                    Main.hof_class = HOF_KMBHan()
+                    Main.hof_class.new_from_map(file)
+                    Main.opened_windows.append(Main.HOFView())
+                    Main.opened_windows[-1].show()
+                    Main.hofname = file.split("\\")[-1]
+                    self.close()
+                except Exception as e:
+                    QMessageBox.critical(self, "Error", f"Failed to import map:\n{str(e)}")
 
         def create_blank_hof(self):
             Main.hof_class = HOF_KMBHan()
@@ -547,7 +563,7 @@ class Main(QMainWindow):
                 )
                 Main.opened_windows[-1].show()
                 new_item = QListWidgetItem(f"NS{lenth}")
-                query = self.ui.Search.toPlainText().strip()
+                query = self.ui.Search.text().strip()
                 if query:
                     new_item.setHidden(not self._fuzzy_match(query, f"NS{lenth}"))
                 dct[stuff][1].addItem(new_item)
@@ -609,10 +625,10 @@ class Main(QMainWindow):
                 new_item.busstopID = "".join(
                     [chr((ord(i) + random.randint(0, 9))) for i in new_item.busstopID]
                 )
-                new_item.name = f"{new_item.name}_"
+                new_item.name = f"{new_item.name}"
                 Main.hof_class.stopreporter.insert(index, new_item)
                 lw_item = QListWidgetItem(new_item.name)
-                query = self.ui.Search.toPlainText().strip()
+                query = self.ui.Search.text().strip()
                 if query:
                     lw_item.setHidden(not self._fuzzy_match(query, new_item.name))
                 self.ui.listWidget_3.insertItem(index, lw_item)
@@ -669,7 +685,7 @@ class Main(QMainWindow):
 
         def add_bs_to_dict(self) -> None:
             query = (
-                self.ui.Search.toPlainText().strip()
+                self.ui.Search.text().strip()
                 if hasattr(self.ui, "Search")
                 else ""
             )
@@ -696,7 +712,7 @@ class Main(QMainWindow):
             return all(c in it for c in q)
 
         def filter_bus_stops(self):
-            query = self.ui.Search.toPlainText().strip()
+            query = self.ui.Search.text().strip()
             for i in range(self.ui.listWidget_3.count()):
                 item = self.ui.listWidget_3.item(i)
                 if item is None:
@@ -795,7 +811,7 @@ class Main(QMainWindow):
             self.ui.listWidget_3.clear()
             self.ui.listWidget_4.clear()
             self.ui.listWidget_5.clear()
-            query = self.ui.Search.toPlainText().strip()
+            query = self.ui.Search.text().strip()
             for stop in Main.hof_class.stopreporter:
                 item = QListWidgetItem(stop.name)
                 if query:
@@ -878,12 +894,20 @@ class Main(QMainWindow):
                     Main.hof_class.stopreporter, key=lambda x: x.name
                 )
                 self.ui.listWidget_3.clear()
-                query = self.ui.Search.toPlainText().strip()
-                for stop in Main.hof_class.stopreporter:
+                # Rebuild the ID→index lookup to reflect the new sorted order
+                self.busstop_id_to_index.clear()
+                query = self.ui.Search.text().strip()
+                for i, stop in enumerate(Main.hof_class.stopreporter):
                     item = QListWidgetItem(stop.name)
+                    item.setData(Qt.ItemDataRole.UserRole, stop.busstopID)
                     if query:
                         item.setHidden(not self._fuzzy_match(query, stop.name))
                     self.ui.listWidget_3.addItem(item)
+                    self.busstop_id_to_index[stop.busstopID] = i
+                # Keep the name→ID map consistent as well
+                self.stop_name_to_id_map = {
+                    stop.name: stop.busstopID for stop in Main.hof_class.stopreporter
+                }
             elif stuff == 2:
                 Main.hof_class.ddu = sorted(Main.hof_class.ddu, key=lambda x: x.RTNO)
                 self.ui.listWidget_4.clear()
@@ -1025,7 +1049,7 @@ class Main(QMainWindow):
                 stop = Main.hof_class.stopreporter[stop_index]
                 item = QListWidgetItem(stop.name)
                 item.setData(Qt.ItemDataRole.UserRole, stop.busstopID)
-                query = self.ui.Search.toPlainText().strip()
+                query = self.ui.Search.text().strip()
                 if query:
                     item.setHidden(not self._fuzzy_match(query, stop.name))
                 self.ui.listWidget_3.addItem(item)
@@ -1789,13 +1813,15 @@ class Main(QMainWindow):
             self.curindex = curindex
             self.ui = AddBusStop_UI()
             self.ui.setupUi(self)
-
+            self.ui.lineEdit_3.setEnabled(True)
+            self.ui.lineEdit_3.setReadOnly(True)
             # Parse the stop name to extract properties
             ui_values = get_ui_values_from_name(name, engdisp)
 
             # Set the base name (without prefix/suffix) in the lineEdit
             self.ui.lineEdit.setText(ui_values["base_name"])
             self.ui.lineEdit_2.setText(engdisp)
+            self.ui.lineEdit_3.setText(name)
             self.ui.spinBox.setValue(chisec)
             self.ui.spinBox_2.setValue(engsec)
             self.ui.spinBox_3.setValue(mansec)
@@ -1836,7 +1862,11 @@ class Main(QMainWindow):
             )
 
             # Update the window title to show the encoded name
-            self.setWindowTitle(f"Edit Bus Stop - Encoded: {encoded_name}")
+                # self.setWindowTitle(f"Edit Bus Sto")
+            self.ui.lineEdit_3.setText(encoded_name) # already read only
+
+            
+            
 
         def get_bs(self):
             Main.raise_unimplemented()

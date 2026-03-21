@@ -12,8 +12,8 @@ class ericcode:
     oristring = ''
     def retstr(self) -> str:
         returnstring = ''.join(self.eric)
-        # if (len(returnstring) - len(self.oristring) == 1 and returnstring[-1] != 0) or (len(returnstring) < 6 and returnstring[-1] != 0):
-        #     returnstring = returnstring + '0'
+        if (len(returnstring) - len(self.oristring) == 1 and returnstring[-1] != 0) or (len(returnstring) < 6 and returnstring[-1] != 0):
+            returnstring = returnstring + '0'
         return returnstring
     def __init__(self, code: str) -> None:
         self.oristring = code
@@ -1143,29 +1143,226 @@ $stoplist2
         print(f"Loaded from {filename}")
 
     def new_from_map(self, map_location: str) -> None:
-        # self.name = mapname
-        # self.servicetrip = mapname
-        # file_ls = os.listdir(f"{map_location}\\TTData") #Please give map location as a folder
-        # files_pending = [i for i in file_ls if i.endswith('.ttp')]
-        # seta = set()
-        # route_sets = set()
-        # for i in files_pending:
-        #     stations = []
-        #     with open(f"{map_location}\\TTData\\{i}", 'r',encoding="utf-8") as f:
-        #         lines = [line.strip() for line in f]
-        #     for index,line in enumerate(lines):
-        #         if line == '[trip]':
-        #             trip = lines[index+1]
-        #             termini = lines[index+2]
-        #             rtno = lines[index+3]
-        #         if line == '[station]':
-        #             stations.append(f"_{lines[index+3]}")
-        #             stations.append(f"_PleaseHoldTheHandrail_HKBTS_KMB")
-        #             stations.append(f"{lines[index+3]}")
-        #     seta.add((rtno,termini,tuple(stations)))
-        # files_pending = [i for i in file_ls if i.endswith('.ttc')]
-        raise NotImplementedError("Map loading is not able to be implemented.")
-        # print(seta)
+        r"""
+        Initialize HOF_Hanover from an OMSI 2 map directory.
+        
+        Args:
+            map_location: Path to map root directory or path to global.cfg file
+                e.g., F:\SteamLibrary\steamapps\common\OMSI 2\maps\Newcastle Pro - Left Path
+                or    F:\SteamLibrary\steamapps\common\OMSI 2\maps\Newcastle Pro - Left Path\global.cfg
+        """
+        from pathlib import Path
+        from mapParser import OMSIMap
+        
+        # Ensure we have a path to global.cfg
+        map_path = Path(map_location)
+        if map_path.is_file() and map_path.name == 'global.cfg':
+            global_cfg = str(map_path)
+        elif map_path.is_dir():
+            global_cfg = str(map_path / 'global.cfg')
+        else:
+            global_cfg = str(map_path)
+        
+        if not Path(global_cfg).exists():
+            raise FileNotFoundError(f"global.cfg not found at {global_cfg}")
+        
+        # Parse map data
+        try:
+            omsi_map = OMSIMap(global_cfg)
+            omsi_map.load_stops()
+            omsi_map.load_trips()
+        except Exception as e:
+            raise RuntimeError(f"Failed to parse map: {e}")
+        
+        # Initialize data lists
+        self.termini = []
+        self.stopreporter = []
+        self.ddu = []
+        self.infosystem = []
+        
+        # Create a mapping of stop_id -> stop name for infosystem generation.
+        stop_id_map = {stop_id: stop_name for stop_name, stop_id in omsi_map.stations}
+        
+        # Direction letters for duplicate routes (from compiler.py mapping_2)
+        # Index 0→Z, 1→Y, 2→X, 3→W, 4→V, 5→U, 6→T, 7→S, 8→R, 9→Q
+        direction_letters = ['Z', 'Y', 'X', 'W', 'V', 'U', 'T', 'S', 'R', 'Q']
+        
+        # Group trips by route_short to detect duplicates
+        routes_by_short = {}
+        for route_code, trip_data in omsi_map.trips.items():
+            route_short = trip_data["route_short"]
+            destination = trip_data["destination"]
+            if route_short not in routes_by_short:
+                routes_by_short[route_short] = []
+            routes_by_short[route_short].append((route_code, destination, trip_data))
+
+        # Keep per-direction metadata for infosystem generation.
+        route_entries_by_short = {}
+        
+        # Create Termini entries with direction assignment for duplicates
+        for route_short, routes in routes_by_short.items():
+            route_entries_by_short[route_short] = []
+            for idx, (route_code, destination, trip_data) in enumerate(routes):
+                # Assign direction letter if multiple routes with same short code
+                if len(routes) > 1:
+                    direction = direction_letters[idx] if idx < len(direction_letters) else 'Z'
+                    eric_str = f"{route_short}{direction}"
+                else:
+                    eric_str = route_short
+
+                route_entries_by_short[route_short].append(
+                    {
+                        "eric": eric_str,
+                        "route_code": route_code,
+                        "destination": destination if destination else route_code,
+                        "stops": trip_data.get("stops", []),
+                    }
+                )
+                
+                # Convert to numeric eric code (e.g., "100Y" -> "100Y" stays as string)
+                # The ericcode class will handle the conversion
+                self.add_terminus(
+                    allexit=False,
+                    eric=eric_str,
+                    destination=destination if destination else route_code,
+                    busfull="",
+                    flip=[],
+                    RTID=""
+                )
+        
+        # Create Busstop_Stopreporter entries from all loaded stops
+        autoskip_id_map = {}
+        for stop_name, stop_id in omsi_map.stations:
+            autoskip_id = f"{stop_id}_SKIP"
+            autoskip_id_map[stop_id] = autoskip_id
+            self.add_stopreporter(
+                name=stop_name,
+                EngDisplay=stop_name,
+                ChiSeconds=0,
+                EngSeconds=0,
+                ManSeconds=0,
+                Outbound_sectionfare=-1.0,  # Use -1 to trigger default display logic
+                Inbound_sectionfare=-1.0,
+                comment="",
+                provided_id=stop_id
+            )
+            self.add_stopreporter(
+                name=f"_{stop_name}",
+                EngDisplay=stop_name,
+                ChiSeconds=0,
+                EngSeconds=0,
+                ManSeconds=0,
+                Outbound_sectionfare=-1.0,  # Use -1 to trigger default display logic
+                Inbound_sectionfare=-1.0,
+                comment="",
+                provided_id=autoskip_id
+            )
+        self.add_stopreporter(
+            name="_PleaseHoldTheHandrail_HKBTS_KMB",
+            EngDisplay="PLEASE HOLD THE@HANDRAIL",
+            ChiSeconds=3,
+            EngSeconds=3,
+            ManSeconds=0,
+            Outbound_sectionfare=0.0,
+            Inbound_sectionfare=0.0,
+            comment="",
+            provided_id="PHTH_KMB"
+        )
+
+        def _destination_suffix(destination: str) -> str:
+            """Build deterministic route marker suffix, e.g. OLY/SL from destination text."""
+            dest = destination.strip()
+            if "_" in dest:
+                dest = dest.split("_", 1)[1]
+            tokens = [re.sub(r"[^A-Za-z0-9]", "", t) for t in dest.upper().split()]
+            tokens = [t for t in tokens if t]
+            if not tokens:
+                return "DIR"
+            if len(tokens) == 1:
+                token = tokens[0]
+                return token[:3] if len(token) >= 3 else token
+            return "".join(t[0] for t in tokens[:3])
+
+        def _expand_infosystem_stops(stop_ids: list[str]) -> tuple[list[str], list[str]]:
+            """Expand each stop to _name, handrail, name triple in trip order with IDs."""
+            expanded = []
+            expanded_ids = []
+            for stop_id in stop_ids:
+                stop_name = stop_id_map.get(stop_id)
+                if not stop_name:
+                    continue
+                expanded.append(f"_{stop_name}")
+                expanded_ids.append(autoskip_id_map.get(stop_id, f"{stop_id}_SKIP"))
+                expanded.append("_PleaseHoldTheHandrail_HKBTS_KMB")
+                expanded_ids.append("PHTH_KMB")
+                expanded.append(stop_name)
+                expanded_ids.append(stop_id)
+            return expanded, expanded_ids
+
+        # Build infosystem pairs per route short code.
+        for route_short, entries in route_entries_by_short.items():
+            if not entries:
+                continue
+
+            first = entries[0]
+            second = entries[1] if len(entries) > 1 else None
+
+            first_suffix = _destination_suffix(first["destination"])
+            first_lines = [f"~{route_short}_{first_suffix}"]
+            first_ids = [""]
+            first_expanded, first_expanded_ids = _expand_infosystem_stops(first["stops"])
+            first_lines.extend(first_expanded)
+            first_ids.extend(first_expanded_ids)
+            first_lines.append(f"#{route_short}_{first_suffix}")
+            first_ids.append("")
+            first_lines.append("blank")
+            first_ids.append("")
+
+            if second is not None:
+                second_suffix = _destination_suffix(second["destination"])
+                second_lines = [f"~{route_short}_{second_suffix}"]
+                second_ids = [""]
+                second_expanded, second_expanded_ids = _expand_infosystem_stops(second["stops"])
+                second_lines.extend(second_expanded)
+                second_ids.extend(second_expanded_ids)
+                second_lines.append(f"#{route_short}_{second_suffix}")
+                second_ids.append("")
+                second_lines.append("blank")
+                second_ids.append("")
+                second_destination = "blank"
+            else:
+                second_lines = ["blank"]
+                second_ids = [""]
+                second_destination = "blank"
+
+            self.add_infosystem(
+                hasid=True,
+                single_or_dual_dir=second is not None,
+                route=route_short,
+                dir1="blank",
+                dir2=second_destination,
+                bustoplist1=first_lines,
+                bustoplist2=second_lines,
+                busstoplist1_ids=first_ids,
+                busstoplist2_ids=second_ids,
+            )
+
+            # Ensure infosystem_trip eric matches assigned termini direction codes.
+            current_info = self.infosystem[-1]
+            current_info.trip1_class.ericcode = first["eric"]
+            if second is not None:
+                current_info.trip2_class.ericcode = second["eric"]
+        
+        # Update name and servicetrip from map metadata if available
+        map_name = Path(global_cfg).parent.name
+        self.name = map_name
+        self.servicetrip = map_name
+        
+        print(f"Loaded HOF from map: {map_name}")
+        print(f"  Termini (routes): {len(self.termini)}")
+        print(f"  Stops: {len(self.stopreporter)}")
+        print(f"  Infosystems: {len(self.infosystem)}")
+
         
 
         # print(self.showfullhof())
