@@ -108,7 +108,7 @@ class OMSIMap:
         
         Populates self.stations with (stopname, stopid) tuples.
         """
-        busstopfile = pathlib.Path(f"{self.basefilelocation}/TTData/Busstops.cfg")
+        busstopfile = self.basefilelocation / "TTData" / "Busstops.cfg"
         
         if busstopfile.exists():
             # Parse from Busstops.cfg

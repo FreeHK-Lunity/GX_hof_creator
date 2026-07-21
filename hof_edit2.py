@@ -1,7 +1,5 @@
 #hof editing module
 import json
-from tkinter import Tk     # from tkinter import Tk for Python 3.x
-from tkinter.filedialog import askopenfilename
 class hof_read:
     def __init__(self, filename):
         self.filename = filename
@@ -312,12 +310,11 @@ class hof_read:
 
         
     
-Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
-filename = askopenfilename() # show an "Open" dialog box and return the path to the selected file
-hof=hof_read(filename)
-hof.json_ex_pai(hof.read_str('stringcount_terminus'),'2')
-hof.json_ex_busstop(hof.read_str('stringcount_busstop'),'3')
-hof.extract_infosystem_busstop_list()
+if __name__ == "__main__" and len(sys.argv) == 2:
+    hof = hof_read(sys.argv[1])
+    hof.json_ex_pai(hof.read_str("stringcount_terminus"), "2")
+    hof.json_ex_busstop(hof.read_str("stringcount_busstop"), "3")
+    hof.extract_infosystem_busstop_list()
 
 
 

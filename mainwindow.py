@@ -6,12 +6,12 @@ import os
 import random
 import re
 import sys
-import tkinter as tk
+from pathlib import Path
 from collections import deque
 from threading import Thread
 from time import sleep
 
-from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QStandardPaths, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QBrush, QCloseEvent, QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -318,10 +318,14 @@ class Main(QMainWindow):
         return True
 
     @staticmethod
+    def default_directory() -> str:
+        return QStandardPaths.writableLocation(QStandardPaths.StandardLocation.HomeLocation) or str(Path.home())
+
+    @staticmethod
     def fileexplorer() -> str:
 
         path_Selected = QFileDialog.getExistingDirectory(
-            None, "Select Directory", "C:\\"
+            None, "Select Directory", Main.default_directory()
         )
 
         return path_Selected
@@ -360,7 +364,7 @@ class Main(QMainWindow):
 
         def fileexplorer(self):
             Main.export_path = QFileDialog.getExistingDirectory(
-                self, "Select Directory", "C:\\"
+                self, "Select Directory", Main.default_directory()
             )
             self.ui.lineEdit.setText(Main.export_path)
 
@@ -382,20 +386,20 @@ class Main(QMainWindow):
         def open_db(self):
             Main.hof_class = HOF_KMBHan()
             file = QFileDialog.getOpenFileName(
-                self, "Open Database", "C:\\", "Database Files (*.db)"
+                self, "Open Database", Main.default_directory(), "Database Files (*.db)"
             )
             if file[0]:
                 Main.hof_class.load_from_db(file[0])
                 Main.opened_windows.append(Main.HOFView())
                 Main.opened_windows[-1].show()
-                Main.hofname = file[0].split("/")[-1].removesuffix(".db")
-                Main.export_path = file[0].removesuffix(Main.hofname + ".db")
+                Main.hofname = Path(file[0]).stem
+                Main.export_path = str(Path(file[0]).parent)
                 self.close()
 
         def open_hof(self):
             Main.hof_class = HOF_KMBHan()
             file = QFileDialog.getOpenFileName(
-                self, "Open HOF", "C:\\", "HOF Files (*.hof)"
+                self, "Open HOF", Main.default_directory(), "HOF Files (*.hof)"
             )
             if file[0]:
                 a = Main.hof_class.load_from_hof(file[0])
@@ -410,7 +414,7 @@ class Main(QMainWindow):
                 # considering that the load_from_hof function can fail due to encoding issues, we should check its return value before proceeding
                 Main.opened_windows.append(Main.HOFView())
                 Main.opened_windows[-1].show()
-                Main.hofname = file[0].split("/")[-1].removesuffix(".hof")
+                Main.hofname = Path(file[0]).stem
                 self.close()
 
         def open_globalcfg(self):
@@ -419,7 +423,7 @@ class Main(QMainWindow):
         def import_from_map(self):
             """Import HOF data from an OMSI 2 map directory"""
             file = QFileDialog.getExistingDirectory(
-                self, "Select OMSI 2 Map Directory", "C:\\"
+                self, "Select OMSI 2 Map Directory", Main.default_directory()
             )
             if file:
                 try:
@@ -427,7 +431,7 @@ class Main(QMainWindow):
                     Main.hof_class.new_from_map(file)
                     Main.opened_windows.append(Main.HOFView())
                     Main.opened_windows[-1].show()
-                    Main.hofname = file.split("\\")[-1]
+                    Main.hofname = Path(file).name
                     self.close()
                 except Exception as e:
                     QMessageBox.critical(self, "Error", f"Failed to import map:\n{str(e)}")
@@ -781,7 +785,7 @@ class Main(QMainWindow):
                 self.close()
                 Main.opened_windows.append(Main.HOFView())
                 Main.opened_windows[-1].show()
-                Main.hofname = file[0].split("/")[-1].removesuffix(".hof")
+                Main.hofname = Path(file[0]).stem
 
         def open_db(self):
             # Close all opened windows except self
@@ -804,7 +808,7 @@ class Main(QMainWindow):
                 self.close()
                 Main.opened_windows.append(Main.HOFView())
                 Main.opened_windows[-1].show()
-                Main.hofname = file[0].split("/")[-1].removesuffix(".db")
+                Main.hofname = Path(file[0]).stem
 
         def open_pref(self):
             Main.opened_windows.append(Main.PrefWin())
@@ -2078,9 +2082,7 @@ class Main(QMainWindow):
 
         def select_flip(self):
             files = QFileDialog.getOpenFileNames(
-                self,
-                "Select Desti Display",
-                "C:\\",
+                self, "Select Desti Display", Main.default_directory(),
                 "Destination Display Files (*.bmp)",
             )
             print(files)

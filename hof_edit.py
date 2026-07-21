@@ -1,4 +1,8 @@
+import sys
+
 import HOF
 
+if len(sys.argv) != 2:
+    raise SystemExit("Usage: python hof_edit.py MAP_PATH")
 hof = HOF.HOF_Hanover()
-hof.new_from_map(r"F:\SteamLibrary\steamapps\common\OMSI 2\maps\Cherryland V6 Addon Pro")
+hof.new_from_map(sys.argv[1])

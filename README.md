@@ -47,8 +47,18 @@ A comprehensive tool for creating and editing HOF files for buses in the OMSI (O
 3. **Run the application:**
 
    ```bash
-   python mainwindow.py
+   python3 mainwindow.py
    ```
+
+### Linux build
+
+Build Linux executable on Linux; PyInstaller does not cross-compile:
+
+```bash
+python3 -m pip install -r requirements.txt pyinstaller
+python3 build.py
+./dist/MainWindow
+```
 
 ## 🚀 Quick Start
 

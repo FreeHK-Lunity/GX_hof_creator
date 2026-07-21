@@ -646,11 +646,11 @@ $stoplist2
         # ])
         return returnstring
     def export_hof(self, filename: str) -> None:
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8', newline='') as f:
             f.write(self.showfullhof())
             print(f"Exported to {filename}, all comments have been destroyed.")
     def export_hof_v2(self, filename: str) -> None:
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8', newline='') as f:
             f.write(self.show_hof_v2())
             print(f"Exported to {filename}, all comments have been destroyed.")
     def save_to_db(self, filename: str) -> None:

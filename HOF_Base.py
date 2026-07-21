@@ -520,7 +520,7 @@ $stoplist2
         returnstring = '\n'.join([''.join(self.header_template.substitute(name = self.name,servicetrip = self.servicetrip)),'\n'.join((str(i) for i in self.termini)),'\n'.join(str(i) for i in self.ddu),'\n'.join((str(i) for i in self.stopreporter)),'\n'.join((str(i) for i in self.infosystem))])
         return returnstring
     def export_hof(self, filename: str) -> None:
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8', newline='') as f:
             f.write(self.showfullhof())
             print(f"Exported to {filename}, all comments have been destroyed.")
     def save_to_db(self, filename: str) -> None:

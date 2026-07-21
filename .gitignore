@@ -1,8 +1,9 @@
 .gitignore_folder/
-__pycache__
-.vscode
-.git
-.venv
+__pycache__/
+*.py[cod]
+.vscode/
+.git/
+.venv/
 *.hof
 *.db
 *.ui*
@@ -13,3 +14,4 @@ build/
 dist/
 build.py
 *.spec
+*.exe
